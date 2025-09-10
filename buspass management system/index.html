@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bus Pass Management System</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .login-box {
+      background: #fff;
+      padding: 20px;
+      margin: 20px auto;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      max-width: 400px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border: 1px solid #333;
+    }
+    button {
+      background: #333;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #555;
+    }
+    .card {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      margin-top: 20px;
+    }
+    #qrcode {
+      margin-top: 10px;
+    }
+    .valid { color: green; font-weight: bold; }
+    .expired { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚍 Bus Pass Management System</h1>
+
+    <!-- Login Section -->
+    <div class="login-box" id="loginBox">
+      <h2>Login</h2>
+      <select id="loginType">
+        <option value="company">Company</option>
+        <option value="customer">Customer</option>
+        <option value="conductor">Conductor</option>
+      </select>
+      <input type="text" id="loginId" placeholder="ID" required>
+      <input type="password" id="loginPassword" placeholder="Password" required>
+      <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Company Dashboard -->
+    <div class="login-box" id="companyDashboard" style="display:none;">
+      <h2>Create Bus Pass</h2>
+      <input type="text" id="custName" placeholder="Customer Name" required>
+      <input type="number" id="custAge" placeholder="Age" required>
+      <select id="custRoute">
+        <option>Route 1 - City Center</option>
+        <option>Route 2 - Airport</option>
+        <option>Route 3 - Railway Station</option>
+      </select>
+      <select id="custDuration">
+        <option value="1">1 Month</option>
+        <option value="3">3 Months</option>
+        <option value="6">6 Months</option>
+        <option value="12">1 Year</option>
+      </select>
+      <button onclick="createPass()">Generate Pass</button>
+      <div id="companyMessage"></div>
+    </div>
+
+    <!-- Customer Dashboard -->
+    <div class="login-box" id="customerDashboard" style="display:none;">
+      <h2>My Bus Pass</h2>
+      <div id="customerPass"></div>
+      <div id="paymentForm" style="display:none;">
+        <h3>Complete Payment</h3>
+        <select id="paymentMethod">
+          <option>UPI</option>
+          <option>Credit Card</option>
+          <option>Debit Card</option>
+          <option>Net Banking</option>
+        </select>
+        <input type="text" id="paymentDetails" placeholder="Enter Payment Details">
+        <button onclick="makePayment()">Pay Now</button>
+      </div>
+    </div>
+
+    <!-- Conductor Dashboard -->
+    <div class="login-box" id="conductorDashboard" style="display:none;">
+      <h2>Verify Bus Pass</h2>
+      <input type="text" id="scanId" placeholder="Enter/Scan Pass ID">
+      <button onclick="verifyPass()">Check Validity</button>
+      <div id="verifyResult"></div>
+    </div>
+  </div>
+
+  <!-- QR Code Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    let passes = JSON.parse(localStorage.getItem("busPasses")) || [];
+    let loggedUser = null;
+
+    // Login function
+    function login() {
+      const type = document.getElementById("loginType").value;
+      const id = document.getElementById("loginId").value;
+      const password = document.getElementById("loginPassword").value;
+
+      if (type === "company") {
+        if (id === "admin" && password === "admin123") {
+          document.getElementById("loginBox").style.display = "none";
+          document.getElementById("companyDashboard").style.display = "block";
+        } else {
+          alert("Invalid company credentials");
+        }
+      } else if (type === "customer") {
+        const user = passes.find(p => p.passId === id && p.password === password);
+        if (user) {
+          loggedUser = user;
+          document.getElementById("loginBox").style.display = "none";
+          document.getElementById("customerDashboard").style.display = "block";
+          if (user.paid) {
+            showCustomerPass(user);
+          } else {
+            document.getElementById("customerPass").innerHTML = `<p>Pass generated but not paid yet.</p>`;
+            document.getElementById("paymentForm").style.display = "block";
+          }
+        } else {
+          alert("Invalid customer credentials");
+        }
+      } else if (type === "conductor") {
+        if (id === "conductor" && password === "check123") {
+          document.getElementById("loginBox").style.display = "none";
+          document.getElementById("conductorDashboard").style.display = "block";
+        } else {
+          alert("Invalid conductor credentials");
+        }
+      }
+    }
+
+    // Create new pass
+    function createPass() {
+      const name = document.getElementById("custName").value;
+      const age = document.getElementById("custAge").value;
+      const route = document.getElementById("custRoute").value;
+      const durationMonths = parseInt(document.getElementById("custDuration").value);
+
+      const passId = "BP" + Date.now();
+      const password = "pass" + Math.floor(Math.random() * 1000);
+      const issueDate = new Date();
+      const expiryDate = new Date();
+      expiryDate.setMonth(issueDate.getMonth() + durationMonths);
+
+      const newPass = { passId, name, age, route, durationMonths, password, paid: false, issueDate, expiryDate };
+      passes.push(newPass);
+      localStorage.setItem("busPasses", JSON.stringify(passes));
+
+      document.getElementById("companyMessage").innerHTML = `
+        <p>✅ Pass created successfully!</p>
+        <p><b>ID:</b> ${passId}</p>
+        <p><b>Password:</b> ${password}</p>
+        <p><i>Customer must log in and complete payment to activate pass.</i></p>
+      `;
+    }
+
+    // Payment process
+    function makePayment() {
+      const method = document.getElementById("paymentMethod").value;
+      const details = document.getElementById("paymentDetails").value;
+      if (!details) {
+        alert("Enter payment details!");
+        return;
+      }
+      loggedUser.paid = true;
+      localStorage.setItem("busPasses", JSON.stringify(passes));
+      alert("✅ Payment Successful via " + method);
+      document.getElementById("paymentForm").style.display = "none";
+      showCustomerPass(loggedUser);
+    }
+
+    // Show customer pass with QR
+    function showCustomerPass(pass) {
+      const div = document.getElementById("customerPass");
+      div.innerHTML = `
+        <div class="card">
+          <h3>${pass.name}</h3>
+          <p>Age: ${pass.age}</p>
+          <p>Route: ${pass.route}</p>
+          <p>Duration: ${pass.durationMonths} months</p>
+          <p><b>Pass ID:</b> ${pass.passId}</p>
+          <p><b>Expiry:</b> ${new Date(pass.expiryDate).toDateString()}</p>
+          <div id="qrcode"></div>
+        </div>
+      `;
+      new QRCode(document.getElementById("qrcode"), pass.passId);
+    }
+
+    // Conductor verifies pass
+    function verifyPass() {
+      const scanId = document.getElementById("scanId").value.trim();
+      const pass = passes.find(p => p.passId === scanId && p.paid);
+
+      if (!pass) {
+        document.getElementById("verifyResult").innerHTML = `<p class="expired">❌ Invalid or Unpaid Pass</p>`;
+        return;
+      }
+
+      const today = new Date();
+      const expiryDate = new Date(pass.expiryDate);
+      const remainingDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+      if (remainingDays >= 0) {
+        document.getElementById("verifyResult").innerHTML = `
+          <p class="valid">✅ Valid Pass</p>
+          <p>Name: ${pass.name}</p>
+          <p>Route: ${pass.route}</p>
+          <p>Expires on: ${expiryDate.toDateString()}</p>
+          <p><b>${remainingDays} days remaining</b></p>
+        `;
+      } else {
+        document.getElementById("verifyResult").innerHTML = `<p class="expired">❌ Pass Expired</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
